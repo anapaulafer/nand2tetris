@@ -1,0 +1,99 @@
+CHIP ALU {
+
+    IN
+
+        x[16], y[16],  // 16-bit inputs
+
+        zx, // zero the x input?
+
+        nx, // negate the x input?
+
+        zy, // zero the y input?
+
+        ny, // negate the y input?
+
+        f,  // compute  out = x + y (if 1) or out = x & y (if 0)
+
+        no; // negate the out output?
+
+
+
+    OUT
+
+        out[16], // 16-bit output
+
+        zr, // 1 if (out==0), 0 otherwise
+
+        ng; // 1 if (out<0),  0 otherwise
+
+
+
+    PARTS:
+
+    Not16(in=x, out=wnx);
+
+    Not16(in=y, out=wny);
+
+    // Manter X, zerar X, negar X ou zerar e negar X
+
+    // 00 = a = x
+
+    // 01 = b = x = 0
+
+    // 10 = c = ~x
+
+    // 11 = c = x = 00..00, ~x, x = 11..11
+
+    Mux4Way16(a=x, b=false, c=wnx, d=true, sel[1]=nx, sel[0]=zx, out=wx);
+
+    // Manter Y, zerar Y, negar Y ou zerar e negar Y
+
+    Mux4Way16(a=y, b=false, c=wny, d=true, sel[1]=ny, sel[0]=zy, out=wy);
+
+
+
+    // Funções x + y e x & y
+
+    Add16(a=wx, b=wy, out=wadd);
+
+    And16(a=wx, b=wy, out=wand);
+
+
+
+    // Escolher um dos resultados
+
+    Mux16(a=wand, b=wadd, sel=f, out=wf);
+
+    // Negar o escolhido
+
+    Not16(in=wf, out=wno);
+
+
+
+    // Escolher out ou ~out, setar flag ng e portar resultado em 2 bytes
+
+    Mux16(a=wf, b=wno, sel=no,
+
+        out=out,
+
+        out[0..7]=low8,
+
+        out[8..15]=high8,
+
+        out[15]=ng
+
+    );
+
+
+
+    // Resultado final é zero?
+
+    Or8Way(in=low8, out=wn1);
+
+    Or8Way(in=high8, out=wn2);
+
+    Or(a=wn1, b=wn2, out=wn3);
+
+    Not(in=wn3, out=zr);
+
+}
