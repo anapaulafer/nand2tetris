@@ -1,0 +1,185 @@
+CHIP CPU {
+
+
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+
+        instruction[16], // Instruction for execution
+
+        reset;           // Signals whether to re-start the current
+
+                         // program (reset==1) or continue executing
+
+                         // the current program (reset==0).
+
+
+
+    OUT outM[16],        // M value output
+
+        writeM,          // Write to M?
+
+        addressM[15],    // Address in data memory (of M)
+
+        pc[15];          // address of next instruction
+
+
+
+    PARTS:
+
+
+
+    // Definir tipo da instrução
+
+    // tipo A: instruction[15] = 0
+
+    // tipo C: instruction[15] = 1
+
+    Not(in=instruction[15], out=instTypeA);
+
+    Not(in=instTypeA, out=instTypeC);
+
+
+
+    // {{{ Write A Register
+
+    // Mux1: 0 -> a, 1 -> b
+
+    Mux16(a=instruction, b=aluOut, sel=instruction[15], out=arInput);
+
+    // writeAR -> instTypeA + d1
+
+    Or(a=instTypeA, b=instruction[5], out=writeAR);
+
+    ARegister(in=arInput, load=writeAR, out=ar, out[0..14]=addressM);
+
+    // }}}
+
+
+
+    // {{{ Write D Register
+
+    // iswriteDR = (dstD + dstMD + dstAD + dstAMD) * instTypeC
+
+    DMux8Way(a=dstNull, b=dstM, c=dstD, d=dstMD, e=dstA, f=dstAM, g=dstAD, h=dstAMD, sel=instruction[3..5], in=true);
+
+    Or(a=dstD, b=dstMD, out=w1);
+
+    Or(a=dstAD, b=dstAMD, out=w2);
+
+    Or(a=w1, b=w2, out=w3);
+
+    And(a=w3, b=instTypeC, out=iswriteDR);
+
+    DRegister(in=aluOut, load=iswriteDR, out=dr);
+
+    // }}}
+
+
+
+    // Mux2
+
+    // Argumento Y da ALU -> A Register ou Input Memory
+
+    Mux16(a=ar, b=inM, sel=instruction[12], out=arORm);
+
+
+
+    ALU(x=dr, y=arORm, zx=instruction[11], nx=instruction[10], zy=instruction[9], ny=instruction[8], f=instruction[7], no=instruction[6], out=aluOut, out=outM, zr=isZero, ng=isNeg);
+
+
+
+    // Inverter flags da ALU
+
+    Not(in=isZero, out=nZero);
+
+    Not(in=isNeg, out=isPos);
+
+
+
+    // {{{ Jumps logic
+
+    // nojump: false
+
+    // jgt: !isZero * !isNeg
+
+    // jeq: isZero
+
+    // jge: isZero + !isNeg
+
+    // jlt: isNeg (* jlt)
+
+    // jne: !isZero
+
+    // jle: isZero + isNeg
+
+    // jmp: true
+
+
+
+    DMux8Way(a=nojump, b=jgt, c=jeq, d=jge, e=jlt, f=jne, g=jle, h=jmp, sel=instruction[0..2], in=true);
+
+
+
+    // menor
+
+    And(a=isNeg, b=jlt, out=dojlt);
+
+    // igual
+
+    And(a=isZero, b=jeq, out=dojeq);
+
+    // maior
+
+    And(a=nZero, b=isPos, out=outgt);
+
+    And(a=outgt, b=jgt, out=dojgt);
+
+    // menor igual
+
+    Or(a=isZero, b=isNeg, out=outle);
+
+    And(a=outle, b=jle, out=dojle);
+
+    // not equal
+
+    And(a=jne, b=nZero, out=dojne);
+
+    // maior igual
+
+    Or(a=isZero, b=isPos, out=outge);
+
+    And(a=outge, b=jge, out=dojge);
+
+
+
+    Or8Way(in[0]=false,in[1]=dojgt,in[2]=dojeq,in[3]=dojge,in[4]=dojlt,in[5]=dojne,in[6]=dojle,in[7]=jmp, out=jumpTrue);
+
+
+
+    // jump apenas em instTypeC
+
+    And(a=jumpTrue, b=instTypeC, out=dojump);
+
+    // fazer salto ou incrementar PC
+
+    Not(in=dojump, out=doinc);
+
+    PC(in=ar, load=dojump, inc=doinc, reset=reset, out[0..14]=pc);
+
+    // }}}
+
+
+
+    // {{{ writeM logic
+
+    Or(a=dstM, b=dstMD, out=wm1);
+
+    Or(a=dstAM, b=dstAMD, out=wm2);
+
+    Or(a=wm1, b=wm2, out=wm3);
+
+    And(a=wm3, b=instTypeC, out=writeM);
+
+    // }}}
+
+}
