@@ -1,0 +1,25 @@
+class Main {
+
+
+
+    // Initializes the square game and starts it.
+
+    function void main() {
+
+        var SquareGame game;
+
+
+
+        let game = game;
+
+        do game.run();
+
+	do game.dispose();
+
+
+
+        return;
+
+    }
+
+}
